@@ -2,12 +2,16 @@
     "port": 3000,
     "backends":[
         {
+            "id": "backend-1",
             "host": "localhost",
-            "port": 5000
+            "port": 5000,
+            "healthy": true
         },
         {
+            "id": "backend-2",
             "host": "localhost",
-            "port": 5001
+            "port": 5001,
+            "healthy": true
         }
     ]
 }

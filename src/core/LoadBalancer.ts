@@ -5,11 +5,21 @@ export class LoadBalancer {
     constructor (private backends: Backend[]) {}
 
     next(): Backend {
-        const backend = this.backends[this.current];
+        const healthy = this.backends.filter(
+            b => b.healthy
+        );
 
-        this.current = 
-        (this.current + 1) %
-        this.backends.length;
+        if(healthy.length === 0) {
+            throw new Error (
+                "No healthy backend available"
+            )
+        }
+        const backend = healthy[
+            this.current %
+            healthy.length
+        ];
+
+        this.current++;
 
         return backend;
     }    
