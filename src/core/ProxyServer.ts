@@ -1,24 +1,31 @@
 import http from 'http';
+import { performance } from 'node:perf_hooks';
 import type { HorizonConfig } from '../config/types.js';
 import { LoadBalancer } from './LoadBalancer.js';
 import { Logger } from '../logger/Logger.js';
 import { HealthChecker } from '../health/HealthChecker.js';
+import { MetricsRegistry } from '../metrics/MetricsRegistry.js';
 
 export class ProxyServer {
   private balancer: LoadBalancer;
+  private healthChecker: HealthChecker;
+  private metrics: MetricsRegistry;
 
-  constructor(
-    private config: HorizonConfig,
-    private healthChecker: HealthChecker,
-  ) {
+  constructor(private config: HorizonConfig) {
     this.balancer = new LoadBalancer(config.backends);
     this.healthChecker = new HealthChecker(config.backends);
+    this.metrics = new MetricsRegistry(config.backends);
   }
 
   start() {
     const server = http.createServer((clientReq, clientRes) => {
-      let backend;
+      if (clientReq.url === '/metrics') {
+        clientRes.writeHead(200, { 'Content-Type': 'application/json' });
+        clientRes.end(JSON.stringify(this.metrics.snapshot(), null, 2));
+        return;
+      }
 
+      let backend;
       try {
         backend = this.balancer.next();
       } catch {
@@ -28,6 +35,10 @@ export class ProxyServer {
       }
 
       Logger.info(`${clientReq.method} ${clientReq.url} -> ${backend.port}`);
+
+      const start = performance.now();
+      this.metrics.recordRequest(backend.id);
+      this.metrics.connectionOpened(backend.id);
 
       const proxyReq = http.request(
         {
@@ -40,6 +51,11 @@ export class ProxyServer {
         (proxyRes) => {
           clientRes.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
           proxyRes.pipe(clientRes);
+
+          proxyRes.on('end', () => {
+            this.metrics.recordLatency(backend.id, performance.now() - start);
+            this.metrics.connectionClosed(backend.id);
+          });
         },
       );
 
@@ -47,6 +63,7 @@ export class ProxyServer {
 
       proxyReq.on('error', (err) => {
         Logger.error(err.message);
+        this.metrics.connectionClosed(backend.id);
         clientRes.statusCode = 502;
         clientRes.end('Bad gateway');
       });
