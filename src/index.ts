@@ -1,5 +1,5 @@
-import { loadConfig } from "./config/config.js";
-import { ProxyServer } from "./core/ProxyServer.js";
+import { loadConfig } from './config/config.js';
+import { ProxyServer } from './core/ProxyServer.js';
 
 const config = loadConfig();
 

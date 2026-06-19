@@ -1,9 +1,11 @@
 {
-  "name": "horizon-proxy",
+  "name": "horizon-proxy-v0.3",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "node --import tsx/esm src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,6 +14,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "prettier": "^3.8.4",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   },
