@@ -5,16 +5,23 @@ import { LoadBalancer } from './LoadBalancer.js';
 import { Logger } from '../logger/Logger.js';
 import { HealthChecker } from '../health/HealthChecker.js';
 import { MetricsRegistry } from '../metrics/MetricsRegistry.js';
+import { RateLimiter } from './RateLimiter.js';
+
+const RATE_LIMIT_DEFAULTS = { maxRequests: 100, windowMs: 60_000 };
 
 export class ProxyServer {
   private balancer: LoadBalancer;
   private healthChecker: HealthChecker;
   private metrics: MetricsRegistry;
+  private rateLimiter: RateLimiter;
 
   constructor(private config: HorizonConfig) {
     this.balancer = new LoadBalancer(config.backends);
     this.healthChecker = new HealthChecker(config.backends);
     this.metrics = new MetricsRegistry(config.backends);
+
+    const rl = config.rateLimit ?? RATE_LIMIT_DEFAULTS;
+    this.rateLimiter = new RateLimiter(rl.maxRequests, rl.windowMs);
   }
 
   start() {
@@ -22,6 +29,22 @@ export class ProxyServer {
       if (clientReq.url === '/metrics') {
         clientRes.writeHead(200, { 'Content-Type': 'application/json' });
         clientRes.end(JSON.stringify(this.metrics.snapshot(), null, 2));
+        return;
+      }
+
+      // Rate limit
+      const ip =
+        (clientReq.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() ??
+        clientReq.socket.remoteAddress ??
+        'unknown';
+
+      if (!this.rateLimiter.isAllowed(ip)) {
+        Logger.info(`RATE LIMITED ${ip}`);
+        clientRes.writeHead(429, {
+          'Content-type': 'text/plain',
+          'Retry-After': String(Math.ceil((this.config.rateLimit?.windowMs ?? 60_000) / 1000)),
+        });
+        clientRes.end('Too Many Requests');
         return;
       }
 
@@ -70,6 +93,8 @@ export class ProxyServer {
     });
 
     this.healthChecker.start();
+    //Every 5 min
+    setInterval(() => this.rateLimiter.purgeExpired(), 5 * 60_000);
 
     server.listen(this.config.port, () => {
       Logger.info(`Horizon listening on ${this.config.port}`);

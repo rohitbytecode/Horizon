@@ -1,5 +1,9 @@
 {
   "port": 3000,
+  "rateLimit": {
+    "maxRequests": 60,
+    "windowMs": 60000
+  },
   "backends": [
     {
       "id": "backend-1",
