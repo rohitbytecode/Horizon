@@ -11,12 +11,13 @@ export class RateLimiter {
     private readonly windowMs: number,
   ) {}
 
-  isAllowed(ip: string): boolean {
+  isAllowed(ip: string, backendId: string): boolean {
+    const key = `${ip}: ${backendId}`;
     const now = Date.now();
-    const entry = this.windows.get(ip);
+    const entry = this.windows.get(key);
 
     if (!entry || now - entry.windowStart >= this.windowMs) {
-      this.windows.set(ip, { count: 1, windowStart: now });
+      this.windows.set(key, { count: 1, windowStart: now });
       return true;
     }
 
@@ -30,9 +31,9 @@ export class RateLimiter {
 
   purgeExpired(): void {
     const now = Date.now();
-    for (const [ip, entry] of this.windows) {
+    for (const [key, entry] of this.windows) {
       if (now - entry.windowStart >= this.windowMs) {
-        this.windows.delete(ip);
+        this.windows.delete(key);
       }
     }
   }

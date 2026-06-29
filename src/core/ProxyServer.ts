@@ -32,28 +32,28 @@ export class ProxyServer {
         return;
       }
 
-      // Rate limit
-      const ip =
-        (clientReq.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() ??
-        clientReq.socket.remoteAddress ??
-        'unknown';
-
-      if (!this.rateLimiter.isAllowed(ip)) {
-        Logger.info(`RATE LIMITED ${ip}`);
-        clientRes.writeHead(429, {
-          'Content-type': 'text/plain',
-          'Retry-After': String(Math.ceil((this.config.rateLimit?.windowMs ?? 60_000) / 1000)),
-        });
-        clientRes.end('Too Many Requests');
-        return;
-      }
-
       let backend;
       try {
         backend = this.balancer.next();
       } catch {
         clientRes.statusCode = 503;
         clientRes.end('No healthy backends available');
+        return;
+      }
+
+      // Rate limit
+      const ip =
+        (clientReq.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() ??
+        clientReq.socket.remoteAddress ??
+        'unknown';
+
+      if (!this.rateLimiter.isAllowed(ip, backend.id)) {
+        Logger.info(`RATE LIMITED ${ip}`);
+        clientRes.writeHead(429, {
+          'Content-type': 'text/plain',
+          'Retry-After': String(Math.ceil((this.config.rateLimit?.windowMs ?? 60_000) / 1000)),
+        });
+        clientRes.end('Too Many Requests');
         return;
       }
 
